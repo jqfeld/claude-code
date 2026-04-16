@@ -65,6 +65,10 @@ USER node
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 ENV PATH=$PATH:/usr/local/share/npm-global/bin
 
+# Install Claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
 
@@ -92,9 +96,7 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
   chmod 0440 /etc/sudoers.d/node-firewall
 USER node
 
-# Install Claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+
 
 # Install juliaup
 RUN curl -fsSL https://install.julialang.org | sh -s -- -y
