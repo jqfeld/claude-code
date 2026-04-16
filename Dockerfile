@@ -1,4 +1,4 @@
-FROM node:20
+FROM node:lts-alpine3.23
 
 ARG TZ
 ENV TZ="$TZ"
