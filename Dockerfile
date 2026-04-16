@@ -66,8 +66,9 @@ ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 ENV PATH=$PATH:/usr/local/share/npm-global/bin
 
 # Install Claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+# RUN curl -fsSL https://claude.ai/install.sh | bash
+# RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
