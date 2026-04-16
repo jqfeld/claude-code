@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   dnsutils \
   aggregate \
   jq \
+  yq \
+  ast-grep \
   nano \
   vim \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
