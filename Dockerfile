@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   jq \
   yq \
   ast-grep \
+  ripgrep \
   nano \
   vim \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
