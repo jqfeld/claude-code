@@ -94,7 +94,7 @@ USER node
 
 # Install Claude
 RUN curl -fsSL https://claude.ai/install.sh | bash
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
 # Install juliaup
 RUN curl -fsSL https://install.julialang.org | sh -s -- -y
