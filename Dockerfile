@@ -83,7 +83,7 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -x
 
 # Install Claude
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN npm install --global @ast-grep/cli
 
 # Copy and set up firewall script
