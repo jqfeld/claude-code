@@ -82,8 +82,6 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
   -x
 
-# Install Claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN npm install --global @ast-grep/cli
 
 # Copy and set up firewall script
@@ -93,6 +91,10 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
   echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
   chmod 0440 /etc/sudoers.d/node-firewall
 USER node
+
+# Install Claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
 # Install juliaup
 RUN curl -fsSL https://install.julialang.org | sh -s -- -y
