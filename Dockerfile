@@ -1,104 +1,79 @@
-FROM node:25
+# Claude Code sandbox: Julia, Rust, Typst + language servers
+# Build:  docker build -t claude-sandbox .
+# Run:    docker run -it --rm \
+#           -v "$(pwd)":/workspace \
+#           -v "$HOME/.claude":/home/claude/.claude \
+#           claude-sandbox
+# Container sees only the mounted working directory (/workspace).
+# The ~/.claude mount persists authentication between runs (optional).
 
-ARG TZ
-ENV TZ="$TZ"
+FROM debian:bookworm-slim
 
-ARG CLAUDE_CODE_VERSION=latest
+ARG JULIA_VERSION=1.12.6
+ARG TYPST_VERSION=0.14.2
+ARG TINYMIST_VERSION=0.14.18
 
-# Install basic development tools and iptables/ipset
+ENV DEBIAN_FRONTEND=noninteractive
+
+# --- System packages + CLI tools that make Claude Code more effective ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  less \
-  git \
-  git-annex \
-  procps \
-  sudo \
-  fzf \
-  zsh \
-  man-db \
-  unzip \
-  gnupg2 \
-  gh \
-  iptables \
-  ipset \
-  iproute2 \
-  dnsutils \
-  aggregate \
-  jq \
-  yq \
-  ripgrep \
-  nano \
-  vim \
-  snakemake \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+    ca-certificates curl wget git openssh-client gnupg \
+    build-essential pkg-config libssl-dev \
+    ripgrep fd-find fzf jq bat tree less procps \
+    unzip zip xz-utils zstd \
+    shellcheck \
+    && rm -rf /var/lib/apt/lists/* \
+    # Debian names: fdfind -> fd, batcat -> bat
+    && ln -s "$(which fdfind)" /usr/local/bin/fd \
+    && ln -s "$(which batcat)" /usr/local/bin/bat
 
-# Ensure default node user has access to /usr/local/share
-RUN mkdir -p /usr/local/share/npm-global && \
-  chown -R node:node /usr/local/share
+# --- yq (YAML processing) + delta (better git diffs) ---
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
+       -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq \
+    && DELTA_VER=$(curl -fsSL https://api.github.com/repos/dandavison/delta/releases/latest | jq -r .tag_name) \
+    && curl -fsSL "https://github.com/dandavison/delta/releases/download/${DELTA_VER}/git-delta_${DELTA_VER}_${ARCH}.deb" \
+       -o /tmp/delta.deb && dpkg -i /tmp/delta.deb && rm /tmp/delta.deb
 
-ARG USERNAME=node
+# --- Typst ---
+RUN ARCH=$(uname -m) \
+    && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-${ARCH}-unknown-linux-musl.tar.xz" \
+       | tar -xJ -C /tmp \
+    && mv /tmp/typst-${ARCH}-unknown-linux-musl/typst /usr/local/bin/ \
+    && rm -rf /tmp/typst-*
 
-# Persist bash history.
-RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  && mkdir /commandhistory \
-  && touch /commandhistory/.bash_history \
-  && chown -R $USERNAME /commandhistory
+# --- Tinymist (Typst language server) ---
+RUN ARCH=$(uname -m) \
+    && curl -fsSL "https://github.com/Myriad-Dreamin/tinymist/releases/download/v${TINYMIST_VERSION}/tinymist-${ARCH}-unknown-linux-gnu.tar.gz" \
+       | tar -xz -C /tmp \
+    && find /tmp -name tinymist -type f -exec mv {} /usr/local/bin/tinymist \; \
+    && chmod +x /usr/local/bin/tinymist \
+    && rm -rf /tmp/tinymist*
 
-# Set `DEVCONTAINER` environment variable to help with orientation
-ENV DEVCONTAINER=true
+# --- Non-root user ---
+RUN useradd -m -s /bin/bash claude
+USER claude
+WORKDIR /home/claude
+ENV PATH="/home/claude/.local/bin:/home/claude/.cargo/bin:/home/claude/.juliaup/bin:${PATH}"
 
-# Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
-  chown -R node:node /workspace /home/node/.claude
+# --- Rust toolchain + rust-analyzer (language server) ---
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile default \
+    && /home/claude/.cargo/bin/rustup component add rust-analyzer clippy rustfmt
 
+# --- Julia (via juliaup) + LanguageServer.jl ---
+RUN curl -fsSL https://install.julialang.org | sh -s -- --yes --default-channel ${JULIA_VERSION} \
+    && julia -e 'using Pkg; Pkg.add(["LanguageServer", "SymbolServer"]); Pkg.precompile()'
+
+# Julia LS launcher (editors/clients can invoke `julia-lsp`)
+RUN mkdir -p /home/claude/.local/bin \
+    && printf '#!/bin/bash\nexec julia --startup-file=no --history-file=no \\\n  -e "using LanguageServer; runserver()" "$@"\n' \
+       > /home/claude/.local/bin/julia-lsp \
+    && chmod +x /home/claude/.local/bin/julia-lsp
+
+# --- Claude Code (native installer, recommended over npm) ---
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# --- Workspace: the only host directory visible inside the container ---
 WORKDIR /workspace
 
-ARG GIT_DELTA_VERSION=0.18.2
-RUN ARCH=$(dpkg --print-architecture) && \
-  wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-  sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-  rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
-
-# Set up non-root user
-USER node
-
-# Install global packages
-ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=$PATH:/usr/local/share/npm-global/bin
-
-# Install Claude
-# RUN curl -fsSL https://claude.ai/install.sh | bash
-# RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
-
-# Set the default shell to zsh rather than sh
-ENV SHELL=/bin/zsh
-
-# Set the default editor and visual
-ENV EDITOR nano
-ENV VISUAL nano
-
-# Default powerline10k theme
-ARG ZSH_IN_DOCKER_VERSION=1.2.0
-RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v${ZSH_IN_DOCKER_VERSION}/zsh-in-docker.sh)" -- \
-  -p git \
-  -p fzf \
-  -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
-  -a "source /usr/share/doc/fzf/examples/completion.zsh" \
-  -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-  -x
-
-RUN npm install --global @ast-grep/cli
-
-# Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
-USER root
-RUN chmod +x /usr/local/bin/init-firewall.sh && \
-  echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
-  chmod 0440 /etc/sudoers.d/node-firewall
-USER node
-
-
-
-# Install juliaup
-RUN curl -fsSL https://install.julialang.org | sh -s -- -y
-
+ENTRYPOINT ["claude"]
