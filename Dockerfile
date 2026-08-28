@@ -7,7 +7,7 @@
 # Container sees only the mounted working directory (/workspace).
 # The ~/.claude mount persists authentication between runs (optional).
 
-FROM debian:bookworm-slim
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04
 
 ARG JULIA_VERSION=1.12.7
 ARG TYPST_VERSION=0.15.1
