@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep fd-find fzf jq bat tree less procps \
     unzip zip xz-utils zstd \
     shellcheck cmake \
+    linux-tools-common linux-tools-generic \
     && rm -rf /var/lib/apt/lists/* \
     # Debian names: fdfind -> fd, batcat -> bat
     && ln -s "$(which fdfind)" /usr/local/bin/fd \
