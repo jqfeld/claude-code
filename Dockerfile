@@ -6,6 +6,8 @@
 #           claude-sandbox
 # Container sees only the mounted working directory (/workspace).
 # The ~/.claude mount persists authentication between runs (optional).
+# Attach "--device nvidia.com/gpu=all" to give claude access to the
+# installed GPU (for CUDA development).
 
 FROM nvidia/cuda:11.8.0-base-ubuntu22.04
 
