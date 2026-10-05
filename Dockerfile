@@ -1,9 +1,9 @@
 # Claude Code sandbox: Julia, Rust, Typst + language servers
-# Build:  docker build -t claude-sandbox .
-# Run:    docker run -it --rm \
+# Build:  podman build -t claude-code .
+# Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
 #           -v "$HOME/.claude":/home/claude/.claude \
-#           claude-sandbox
+#           claude-code
 # Container sees only the mounted working directory (/workspace).
 # The ~/.claude mount persists authentication between runs (optional).
 # Attach "--device nvidia.com/gpu=all" to give claude access to the
