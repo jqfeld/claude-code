@@ -114,7 +114,8 @@ RUN curl -fsSL "https://github.com/GlobalArrays/ga/releases/download/v${GA_VERSI
     && cmake --install /tmp/ga-${GA_VERSION}/build \
     && rm -rf /tmp/ga-*
 
-# PETSc + SLEPc with 64-bit indices on top of the ILP64 stack (UKRmol+ SLEPc eigensolvers)
+# PETSc + SLEPc with 64-bit indices on top of ILP64 OpenBLAS (UKRmol+ SLEPc eigensolvers).
+# PETSc rejects ScaLAPACK together with 64-bit BLAS indices, so it is left out here.
 RUN curl -fsSL "https://gitlab.com/petsc/petsc/-/archive/v${PETSC_VERSION}/petsc-v${PETSC_VERSION}.tar.gz" \
        | tar -xz -C /tmp \
     && cd /tmp/petsc-v${PETSC_VERSION} \
@@ -122,7 +123,6 @@ RUN curl -fsSL "https://gitlab.com/petsc/petsc/-/archive/v${PETSC_VERSION}/petsc
          --with-cc=mpicc --with-cxx=mpicxx --with-fc=mpifort --with-fortran-bindings=1 \
          --with-shared-libraries=1 --with-64-bit-indices=1 --with-64-bit-blas-indices=1 \
          --with-blaslapack-lib=${ILP64_PREFIX}/lib/libopenblas.so \
-         --with-scalapack-lib=${ILP64_PREFIX}/lib/libscalapack.so \
          COPTFLAGS=-O2 CXXOPTFLAGS=-O2 FOPTFLAGS=-O2 \
     && make -j"$(nproc)" PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt all \
     && make PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt install \
