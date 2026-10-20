@@ -22,14 +22,6 @@ ARG JULIA_VERSION=1.13
 ARG PYTHON_VERSION=3.13
 ARG TYPST_VERSION=0.15.1
 ARG TINYMIST_VERSION=0.15.2
-# ILP64 numerical stack (8-byte integers), required by OpenMolcas (LINALG=OpenBLAS, GA)
-# and by UKRmol+ when built with -fdefault-integer-8 (the upstream configuration).
-ARG OPENBLAS_VERSION=0.3.34
-ARG SCALAPACK_VERSION=2.2.3
-ARG ARPACK_NG_VERSION=3.9.1
-ARG GA_VERSION=5.9.2
-ARG PETSC_VERSION=3.26.0
-ARG SLEPC_VERSION=3.26.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -42,10 +34,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shellcheck cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# --- OpenMolcas + UKRmol+ build dependencies (distro packages) ---
+# --- OpenMolcas + UKRmol+ build dependencies (distro packages only) ---
+# Not included (long build times): ILP64 OpenBLAS/ScaLAPACK/ARPACK/Global Arrays, PETSc/SLEPc.
+# OpenMolcas builds with its internal BLAS/LAPACK (-DLINALG=Internal); libxc and libwignernj
+# are fetched by its CMake via git.
 # gfortran:        Fortran 2008 compiler (libquadmath included: GBTOlib quad precision)
-# python3:         needed by the PETSc/SLEPc configure scripts below
-# OpenMPI:         OpenMolcas -DMPI=ON / GA, UKRmol+ -DWITH_MPI=ON (mpi-scatci)
+# OpenMPI:         OpenMolcas -DMPI=ON, UKRmol+ -DWITH_MPI=ON (mpi-scatci)
 # HDF5:            OpenMolcas -DHDF5=ON (default)
 # numdiff:         UKRmol+ test suite (-DWITH_NUMDIFF=ON)
 # CLBlast/OpenCL:  GBTOlib GPU-accelerated BLAS (optional)
@@ -53,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Perl modules:    OpenMolcas TaskFarm
 # doxygen:         UKRmol+ API documentation (-DBUILD_DOC=ON, optional)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gfortran python3 \
+    gfortran \
     libopenmpi-dev openmpi-bin \
     libhdf5-dev \
     numdiff \
@@ -63,93 +57,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     perl libipc-shareable-perl libparallel-forkmanager-perl \
     doxygen \
     && rm -rf /var/lib/apt/lists/*
-
-# --- ILP64 numerical stack (built from source, installed to /opt/ilp64) ---
-# Ubuntu's BLAS/LAPACK/ScaLAPACK/ARPACK packages use 4-byte integers (or a "64_"
-# symbol suffix), which neither OpenMolcas nor UKRmol+ can link against. Everything
-# below is built with 8-byte integers and plain (unsuffixed) symbol names.
-ENV ILP64_PREFIX=/opt/ilp64
-
-# OpenBLAS with LAPACK (OpenMolcas: -DLINALG=OpenBLAS, OPENBLASROOT; UKRmol+: BLAS_LIBRARIES)
-RUN curl -fsSL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPENBLAS_VERSION}/OpenBLAS-${OPENBLAS_VERSION}.tar.gz" \
-       | tar -xz -C /tmp \
-    && cd /tmp/OpenBLAS-${OPENBLAS_VERSION} \
-    && make -j"$(nproc)" INTERFACE64=1 NO_LAPACK=0 BINARY=64 DYNAMIC_ARCH=1 USE_OPENMP=1 NUM_THREADS=128 \
-         libs netlib shared \
-    && make INTERFACE64=1 NO_LAPACK=0 BINARY=64 DYNAMIC_ARCH=1 USE_OPENMP=1 NUM_THREADS=128 \
-         PREFIX=${ILP64_PREFIX} install \
-    && cd /tmp && rm -rf /tmp/OpenBLAS-*
-
-# ScaLAPACK (UKRmol+: SCALAPACK_LIBRARIES; PETSc below)
-RUN git clone --depth 1 --branch "v${SCALAPACK_VERSION}" https://github.com/Reference-ScaLAPACK/scalapack.git /tmp/scalapack \
-    && cmake -S /tmp/scalapack -B /tmp/scalapack/build \
-         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${ILP64_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \
-         -DBUILD_SHARED_LIBS=ON -DBUILD_TESTING=OFF \
-         -DBLAS_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so -DLAPACK_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so \
-         -DCMAKE_C_FLAGS="-DInt=long" -DCMAKE_Fortran_FLAGS="-fdefault-integer-8 -fallow-argument-mismatch" \
-    && cmake --build /tmp/scalapack/build -j"$(nproc)" \
-    && cmake --install /tmp/scalapack/build \
-    && rm -rf /tmp/scalapack
-
-# ARPACK-NG (UKRmol+ eigensolvers). Serial only: upstream PARPACK does not support ILP64.
-RUN git clone --depth 1 --branch "${ARPACK_NG_VERSION}" https://github.com/opencollab/arpack-ng.git /tmp/arpack-ng \
-    && cmake -S /tmp/arpack-ng -B /tmp/arpack-ng/build \
-         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${ILP64_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \
-         -DBUILD_SHARED_LIBS=ON -DINTERFACE64=ON -DMPI=OFF -DTESTS=OFF -DEXAMPLES=OFF \
-         -DBLAS_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so -DLAPACK_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so \
-    && cmake --build /tmp/arpack-ng/build -j"$(nproc)" \
-    && cmake --install /tmp/arpack-ng/build \
-    && rm -rf /tmp/arpack-ng
-
-# Global Arrays (OpenMolcas: -DMPI=ON -DGA=ON with GAROOT; same options OpenMolcas uses for -DGA_BUILD=ON)
-RUN curl -fsSL "https://github.com/GlobalArrays/ga/releases/download/v${GA_VERSION}/ga-${GA_VERSION}.tar.gz" \
-       | tar -xz -C /tmp \
-    && cmake -S /tmp/ga-${GA_VERSION} -B /tmp/ga-${GA_VERSION}/build \
-         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${ILP64_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \
-         -DCMAKE_C_COMPILER=mpicc -DCMAKE_Fortran_COMPILER=mpifort \
-         -DBUILD_SHARED_LIBS=ON -DENABLE_FORTRAN=ON -DENABLE_CXX=OFF -DENABLE_TESTS=OFF \
-         -DENABLE_BLAS=ON -DENABLE_I8=ON -DLINALG_VENDOR=OpenBLAS -DLINALG_PREFIX=${ILP64_PREFIX} \
-         -DLINALG_REQUIRED_COMPONENTS=ilp64 -DGA_RUNTIME=MPI_2SIDED \
-    && cmake --build /tmp/ga-${GA_VERSION}/build -j"$(nproc)" \
-    && cmake --install /tmp/ga-${GA_VERSION}/build \
-    && rm -rf /tmp/ga-*
-
-# PETSc + SLEPc with 64-bit indices on top of ILP64 OpenBLAS (UKRmol+ SLEPc eigensolvers).
-# PETSc rejects ScaLAPACK together with 64-bit BLAS indices, so it is left out here.
-RUN curl -fsSL "https://gitlab.com/petsc/petsc/-/archive/v${PETSC_VERSION}/petsc-v${PETSC_VERSION}.tar.gz" \
-       | tar -xz -C /tmp \
-    && cd /tmp/petsc-v${PETSC_VERSION} \
-    && ./configure --prefix=/opt/petsc --with-debugging=0 \
-         --with-cc=mpicc --with-cxx=mpicxx --with-fc=mpifort --with-fortran-bindings=1 \
-         --with-shared-libraries=1 --with-64-bit-indices=1 --with-64-bit-blas-indices=1 \
-         --with-blaslapack-lib=${ILP64_PREFIX}/lib/libopenblas.so \
-         COPTFLAGS=-O2 CXXOPTFLAGS=-O2 FOPTFLAGS=-O2 \
-    && make -j"$(nproc)" PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt all \
-    && make PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt install \
-    && cd /tmp && rm -rf /tmp/petsc-* \
-    && curl -fsSL "https://gitlab.com/slepc/slepc/-/archive/v${SLEPC_VERSION}/slepc-v${SLEPC_VERSION}.tar.gz" \
-       | tar -xz -C /tmp \
-    && cd /tmp/slepc-v${SLEPC_VERSION} \
-    && PETSC_DIR=/opt/petsc ./configure --prefix=/opt/slepc \
-    && make -j"$(nproc)" SLEPC_DIR=/tmp/slepc-v${SLEPC_VERSION} PETSC_DIR=/opt/petsc \
-    && make SLEPC_DIR=/tmp/slepc-v${SLEPC_VERSION} PETSC_DIR=/opt/petsc install \
-    && cd /tmp && rm -rf /tmp/slepc-*
-
-# Make the stack discoverable at build and run time.
-# (No distro OpenBLAS/ScaLAPACK is installed, so the ILP64 sonames do not shadow anything.)
-RUN printf '%s\n' "${ILP64_PREFIX}/lib" /opt/petsc/lib /opt/slepc/lib > /etc/ld.so.conf.d/ilp64.conf \
-    && ldconfig
-ENV OPENBLASROOT=${ILP64_PREFIX} \
-    GAROOT=${ILP64_PREFIX} \
-    PETSC_DIR=/opt/petsc \
-    SLEPC_DIR=/opt/slepc \
-    CMAKE_PREFIX_PATH=${ILP64_PREFIX}:/opt/petsc:/opt/slepc
-# Typical configure lines (libxc and libwignernj are fetched by OpenMolcas' CMake via git):
-#   OpenMolcas: CC=mpicc FC=mpifort cmake -DMPI=ON -DGA=ON -DLINALG=OpenBLAS -DHDF5=ON <src>
-#   UKRmol-in:  cmake -DCMAKE_Fortran_COMPILER=mpifort -DCMAKE_Fortran_FLAGS=-fdefault-integer-8 \
-#                 -DBLAS_LIBRARIES=/opt/ilp64/lib/libopenblas.so -DLAPACK_LIBRARIES=/opt/ilp64/lib/libopenblas.so \
-#                 -DSCALAPACK_LIBRARIES=/opt/ilp64/lib/libscalapack.so -DWITH_MPI=ON \
-#                 -DUKRMOL_OUT_DIR=<ukrmol-out src> <ukrmol-in src>
 
 # --- Typst ---
 RUN ARCH=$(uname -m) \
