@@ -1,4 +1,4 @@
-# Claude Code sandbox: Julia, Rust, Typst + language servers
+# Claude Code sandbox: Julia, Rust, Python (uv), Typst + language servers
 # Build:  podman build -t claude-code .
 # Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
@@ -9,9 +9,16 @@
 # Attach "--device nvidia.com/gpu=all" to give claude access to the
 # installed GPU (for CUDA development).
 
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04
+ARG UV_VERSION=latest
+
+# uv/uvx static binaries (official image; pin UV_VERSION for reproducible builds)
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
+# CUDA 13.x needs host NVIDIA driver >= 580
+FROM nvidia/cuda:13.4.3-base-ubuntu26.04
 
 ARG JULIA_VERSION=1.13
+ARG PYTHON_VERSION=3.13
 ARG TYPST_VERSION=0.15.1
 ARG TINYMIST_VERSION=0.15.2
 
@@ -19,24 +26,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # --- System packages + CLI tools that make Claude Code more effective ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl wget git openssh-client gnupg \
+    ca-certificates curl git \
     build-essential pkg-config libssl-dev \
-    ripgrep fd-find fzf jq bat tree less procps \
-    unzip zip xz-utils zstd \
+    ripgrep jq procps \
+    unzip xz-utils zstd \
     shellcheck cmake \
-    linux-tools-common linux-tools-generic \
-    && rm -rf /var/lib/apt/lists/* \
-    # Debian names: fdfind -> fd, batcat -> bat
-    && ln -s "$(which fdfind)" /usr/local/bin/fd \
-    && ln -s "$(which batcat)" /usr/local/bin/bat
-
-# --- yq (YAML processing) + delta (better git diffs) ---
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
-       -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq \
-    && DELTA_VER=$(curl -fsSL https://api.github.com/repos/dandavison/delta/releases/latest | jq -r .tag_name) \
-    && curl -fsSL "https://github.com/dandavison/delta/releases/download/${DELTA_VER}/git-delta_${DELTA_VER}_${ARCH}.deb" \
-       -o /tmp/delta.deb && dpkg -i /tmp/delta.deb && rm /tmp/delta.deb
+    && rm -rf /var/lib/apt/lists/*
 
 # --- Typst ---
 RUN ARCH=$(uname -m) \
@@ -53,8 +48,13 @@ RUN ARCH=$(uname -m) \
     && chmod +x /usr/local/bin/tinymist \
     && rm -rf /tmp/tinymist*
 
+# --- uv (Python package/project manager) ---
+COPY --from=uv /uv /uvx /usr/local/bin/
+
 # --- Non-root user ---
-RUN useradd -m -s /bin/bash claude
+# Ubuntu 24.04+ images ship user "ubuntu" (UID 1000); drop it so claude gets UID 1000
+RUN userdel -r ubuntu 2>/dev/null || true \
+    && useradd -m -u 1000 -s /bin/bash claude
 USER claude
 WORKDIR /home/claude
 ENV PATH="/home/claude/.local/bin:/home/claude/.cargo/bin:/home/claude/.juliaup/bin:${PATH}"
@@ -62,6 +62,15 @@ ENV PATH="/home/claude/.local/bin:/home/claude/.cargo/bin:/home/claude/.juliaup/
 # --- Rust toolchain + rust-analyzer (language server) ---
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile default \
     && /home/claude/.cargo/bin/rustup component add rust-analyzer clippy rustfmt
+
+# --- Python (uv-managed) + ruff (lint/format) + basedpyright (language server) ---
+# Mounted /workspace is a different filesystem than the uv cache: copy, don't hardlink.
+ENV UV_LINK_MODE=copy \
+    UV_PYTHON_PREFERENCE=only-managed
+RUN uv python install --default ${PYTHON_VERSION} \
+    && uv tool install ruff \
+    && uv tool install basedpyright \
+    && uv cache clean
 
 # --- Julia (via juliaup) + LanguageServer.jl ---
 RUN curl -fsSL https://install.julialang.org | sh -s -- --yes --default-channel ${JULIA_VERSION} \
