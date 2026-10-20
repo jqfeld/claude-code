@@ -78,7 +78,7 @@ RUN curl -fsSL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${OPE
          libs netlib shared \
     && make INTERFACE64=1 NO_LAPACK=0 BINARY=64 DYNAMIC_ARCH=1 USE_OPENMP=1 NUM_THREADS=128 \
          PREFIX=${ILP64_PREFIX} install \
-    && rm -rf /tmp/OpenBLAS-*
+    && cd /tmp && rm -rf /tmp/OpenBLAS-*
 
 # ScaLAPACK (UKRmol+: SCALAPACK_LIBRARIES; PETSc below)
 RUN git clone --depth 1 --branch "v${SCALAPACK_VERSION}" https://github.com/Reference-ScaLAPACK/scalapack.git /tmp/scalapack \
@@ -126,14 +126,14 @@ RUN curl -fsSL "https://gitlab.com/petsc/petsc/-/archive/v${PETSC_VERSION}/petsc
          COPTFLAGS=-O2 CXXOPTFLAGS=-O2 FOPTFLAGS=-O2 \
     && make -j"$(nproc)" PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt all \
     && make PETSC_DIR=/tmp/petsc-v${PETSC_VERSION} PETSC_ARCH=arch-linux-c-opt install \
-    && rm -rf /tmp/petsc-* \
+    && cd /tmp && rm -rf /tmp/petsc-* \
     && curl -fsSL "https://gitlab.com/slepc/slepc/-/archive/v${SLEPC_VERSION}/slepc-v${SLEPC_VERSION}.tar.gz" \
        | tar -xz -C /tmp \
     && cd /tmp/slepc-v${SLEPC_VERSION} \
     && PETSC_DIR=/opt/petsc ./configure --prefix=/opt/slepc \
     && make -j"$(nproc)" SLEPC_DIR=/tmp/slepc-v${SLEPC_VERSION} PETSC_DIR=/opt/petsc \
     && make SLEPC_DIR=/tmp/slepc-v${SLEPC_VERSION} PETSC_DIR=/opt/petsc install \
-    && rm -rf /tmp/slepc-*
+    && cd /tmp && rm -rf /tmp/slepc-*
 
 # Make the stack discoverable at build and run time.
 # (No distro OpenBLAS/ScaLAPACK is installed, so the ILP64 sonames do not shadow anything.)
