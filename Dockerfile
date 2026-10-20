@@ -45,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --- OpenMolcas + UKRmol+ build dependencies (distro packages) ---
 # gfortran:        Fortran 2008 compiler (libquadmath included: GBTOlib quad precision)
 # python3:         needed by the PETSc/SLEPc configure scripts below
-# OpenMPI:         OpenMolcas -DMPI=ON / GA, UKRmol+ -DWITH_MPI=ON (mpi-scatci, PARPACK)
+# OpenMPI:         OpenMolcas -DMPI=ON / GA, UKRmol+ -DWITH_MPI=ON (mpi-scatci)
 # HDF5:            OpenMolcas -DHDF5=ON (default)
 # numdiff:         UKRmol+ test suite (-DWITH_NUMDIFF=ON)
 # CLBlast/OpenCL:  GBTOlib GPU-accelerated BLAS (optional)
@@ -91,11 +91,11 @@ RUN git clone --depth 1 --branch "v${SCALAPACK_VERSION}" https://github.com/Refe
     && cmake --install /tmp/scalapack/build \
     && rm -rf /tmp/scalapack
 
-# ARPACK-NG + PARPACK (UKRmol+ eigensolvers)
+# ARPACK-NG (UKRmol+ eigensolvers). Serial only: upstream PARPACK does not support ILP64.
 RUN git clone --depth 1 --branch "${ARPACK_NG_VERSION}" https://github.com/opencollab/arpack-ng.git /tmp/arpack-ng \
     && cmake -S /tmp/arpack-ng -B /tmp/arpack-ng/build \
          -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${ILP64_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \
-         -DBUILD_SHARED_LIBS=ON -DINTERFACE64=ON -DMPI=ON -DTESTS=OFF -DEXAMPLES=OFF \
+         -DBUILD_SHARED_LIBS=ON -DINTERFACE64=ON -DMPI=OFF -DTESTS=OFF -DEXAMPLES=OFF \
          -DBLAS_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so -DLAPACK_LIBRARIES=${ILP64_PREFIX}/lib/libopenblas.so \
     && cmake --build /tmp/arpack-ng/build -j"$(nproc)" \
     && cmake --install /tmp/arpack-ng/build \
