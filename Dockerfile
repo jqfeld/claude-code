@@ -26,21 +26,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # --- System packages + CLI tools that make Claude Code more effective ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl wget git openssh-client gnupg \
+    ca-certificates curl git \
     build-essential pkg-config libssl-dev \
-    ripgrep fzf jq tree less procps \
-    unzip zip xz-utils zstd \
+    ripgrep jq procps \
+    unzip xz-utils zstd \
     shellcheck cmake \
-    linux-tools-common linux-tools-generic \
     && rm -rf /var/lib/apt/lists/*
-
-# --- yq (YAML processing) + delta (better git diffs) ---
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}" \
-       -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq \
-    && DELTA_VER=$(curl -fsSL https://api.github.com/repos/dandavison/delta/releases/latest | jq -r .tag_name) \
-    && curl -fsSL "https://github.com/dandavison/delta/releases/download/${DELTA_VER}/git-delta_${DELTA_VER}_${ARCH}.deb" \
-       -o /tmp/delta.deb && dpkg -i /tmp/delta.deb && rm /tmp/delta.deb
 
 # --- Typst ---
 RUN ARCH=$(uname -m) \
