@@ -14,7 +14,8 @@ ARG UV_VERSION=latest
 # uv/uvx static binaries (official image; pin UV_VERSION for reproducible builds)
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04
+# CUDA 13.x needs host NVIDIA driver >= 580
+FROM nvidia/cuda:13.4.3-base-ubuntu26.04
 
 ARG JULIA_VERSION=1.13
 ARG PYTHON_VERSION=3.13
@@ -63,7 +64,9 @@ RUN ARCH=$(uname -m) \
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 # --- Non-root user ---
-RUN useradd -m -s /bin/bash claude
+# Ubuntu 24.04+ images ship user "ubuntu" (UID 1000); drop it so claude gets UID 1000
+RUN userdel -r ubuntu 2>/dev/null || true \
+    && useradd -m -u 1000 -s /bin/bash claude
 USER claude
 WORKDIR /home/claude
 ENV PATH="/home/claude/.local/bin:/home/claude/.cargo/bin:/home/claude/.juliaup/bin:${PATH}"
