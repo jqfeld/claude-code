@@ -1,5 +1,4 @@
-# Claude Code sandbox: Julia, Rust, Python (uv), Typst + language servers,
-# plus the build dependencies of OpenMolcas and UKRmol+ (GBTOlib/UKRmol-in/UKRmol-out).
+# Claude Code sandbox: Julia, Rust, Python (uv), Typst + language servers
 # Build:  podman build -t claude-code .
 # Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
@@ -32,30 +31,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep jq procps \
     unzip xz-utils zstd \
     shellcheck cmake \
-    && rm -rf /var/lib/apt/lists/*
-
-# --- OpenMolcas + UKRmol+ build dependencies (distro packages only) ---
-# Not included (long build times): ILP64 OpenBLAS/ScaLAPACK/ARPACK/Global Arrays, PETSc/SLEPc.
-# OpenMolcas builds with its internal BLAS/LAPACK (-DLINALG=Internal); libxc and libwignernj
-# are fetched by its CMake via git.
-# gfortran:        Fortran 2008 compiler (libquadmath included: GBTOlib quad precision)
-# OpenMPI:         OpenMolcas -DMPI=ON, UKRmol+ -DWITH_MPI=ON (mpi-scatci)
-# HDF5:            OpenMolcas -DHDF5=ON (default)
-# numdiff:         UKRmol+ test suite (-DWITH_NUMDIFF=ON)
-# CLBlast/OpenCL:  GBTOlib GPU-accelerated BLAS (optional)
-# Boost + GSL:     OpenMolcas QCMaquis DMRG interface (-DDMRG=ON, optional)
-# Perl modules:    OpenMolcas TaskFarm
-# doxygen:         UKRmol+ API documentation (-DBUILD_DOC=ON, optional)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gfortran \
-    libopenmpi-dev openmpi-bin \
-    libhdf5-dev \
-    numdiff \
-    libclblast-dev ocl-icd-opencl-dev \
-    libboost-dev libboost-program-options-dev libboost-serialization-dev \
-    libboost-filesystem-dev libboost-thread-dev libgsl-dev \
-    perl libipc-shareable-perl libparallel-forkmanager-perl \
-    doxygen \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Typst ---
@@ -92,10 +67,7 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --p
 # Mounted /workspace is a different filesystem than the uv cache: copy, don't hardlink.
 ENV UV_LINK_MODE=copy \
     UV_PYTHON_PREFERENCE=only-managed
-# pyparsing: required by OpenMolcas' pymolcas driver (installed into the managed interpreter,
-# which is what `python3` resolves to in this image; uv marks it externally managed).
 RUN uv python install --default ${PYTHON_VERSION} \
-    && uv pip install --python "$(uv python find ${PYTHON_VERSION})" --break-system-packages pyparsing \
     && uv tool install ruff \
     && uv tool install basedpyright \
     && uv cache clean
