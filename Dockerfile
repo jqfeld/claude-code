@@ -1,4 +1,4 @@
-# Claude Code sandbox: Julia, Rust, Typst + language servers
+# Claude Code sandbox: Julia, Rust, Python (uv), Typst + language servers
 # Build:  podman build -t claude-code .
 # Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
@@ -9,9 +9,15 @@
 # Attach "--device nvidia.com/gpu=all" to give claude access to the
 # installed GPU (for CUDA development).
 
+ARG UV_VERSION=latest
+
+# uv/uvx static binaries (official image; pin UV_VERSION for reproducible builds)
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 FROM nvidia/cuda:11.8.0-base-ubuntu22.04
 
 ARG JULIA_VERSION=1.13
+ARG PYTHON_VERSION=3.13
 ARG TYPST_VERSION=0.15.1
 ARG TINYMIST_VERSION=0.15.2
 
@@ -53,6 +59,9 @@ RUN ARCH=$(uname -m) \
     && chmod +x /usr/local/bin/tinymist \
     && rm -rf /tmp/tinymist*
 
+# --- uv (Python package/project manager) ---
+COPY --from=uv /uv /uvx /usr/local/bin/
+
 # --- Non-root user ---
 RUN useradd -m -s /bin/bash claude
 USER claude
@@ -62,6 +71,15 @@ ENV PATH="/home/claude/.local/bin:/home/claude/.cargo/bin:/home/claude/.juliaup/
 # --- Rust toolchain + rust-analyzer (language server) ---
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile default \
     && /home/claude/.cargo/bin/rustup component add rust-analyzer clippy rustfmt
+
+# --- Python (uv-managed) + ruff (lint/format) + basedpyright (language server) ---
+# Mounted /workspace is a different filesystem than the uv cache: copy, don't hardlink.
+ENV UV_LINK_MODE=copy \
+    UV_PYTHON_PREFERENCE=only-managed
+RUN uv python install --default ${PYTHON_VERSION} \
+    && uv tool install ruff \
+    && uv tool install basedpyright \
+    && uv cache clean
 
 # --- Julia (via juliaup) + LanguageServer.jl ---
 RUN curl -fsSL https://install.julialang.org | sh -s -- --yes --default-channel ${JULIA_VERSION} \
