@@ -28,14 +28,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl wget git openssh-client gnupg \
     build-essential pkg-config libssl-dev \
-    ripgrep fd-find fzf jq bat tree less procps \
+    ripgrep fzf jq tree less procps \
     unzip zip xz-utils zstd \
     shellcheck cmake \
     linux-tools-common linux-tools-generic \
-    && rm -rf /var/lib/apt/lists/* \
-    # Debian names: fdfind -> fd, batcat -> bat
-    && ln -s "$(which fdfind)" /usr/local/bin/fd \
-    && ln -s "$(which batcat)" /usr/local/bin/bat
+    && rm -rf /var/lib/apt/lists/*
 
 # --- yq (YAML processing) + delta (better git diffs) ---
 RUN ARCH=$(dpkg --print-architecture) \
