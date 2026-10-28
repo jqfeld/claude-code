@@ -1,4 +1,4 @@
-# Claude Code sandbox: Julia, Rust, Python (uv), Typst + language servers
+# Claude Code sandbox: Julia, Rust, Python (uv), Typst, OpenFOAM + language servers
 # Build:  podman build -t claude-code .
 # Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
@@ -33,20 +33,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shellcheck cmake \
     && rm -rf /var/lib/apt/lists/*
 
-
-# Add the official OpenFOAM GPG key and repository
-RUN curl -fsSL https://openfoam.org | gpg --dearmor -o /usr/share/keyrings/openfoam-archive-keyring.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/openfoam-archive-keyring.gpg] http://openfoam.org noble main" \
-    > /etc/apt/sources.list.d/openfoam.list
-
-# Install OpenFOAM (development release) and clear apt cache to keep image size small
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openfoam-dev \
+# --- OpenFOAM (dev) from dl.openfoam.org ---
+# Key is ASCII-armored; apt reads .asc directly via signed-by (no gpg needed).
+# Explicit [arch=...] avoids the amd64v3 lookup warning on Ubuntu 26.04.
+# openfoam-dev lives in the "dev" component; suite = Ubuntu codename (resolute).
+RUN curl -fsSL https://dl.openfoam.org/gpg.key -o /etc/apt/keyrings/openfoam.asc \
+    && . /etc/os-release \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/openfoam.asc] http://dl.openfoam.org/ubuntu ${VERSION_CODENAME} main dev" \
+       > /etc/apt/sources.list.d/openfoam.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends openfoam-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Automatically source OpenFOAM environment variables for interactive bash sessions
-RUN echo "source /opt/openfoam-dev/etc/bashrc" >> /etc/bashrc
-
+# Load OpenFOAM env in interactive shells (bash.bashrc) and
+# non-interactive bash (BASH_ENV) — Claude Code's Bash tool is non-interactive.
+RUN printf 'source /opt/openfoam-dev/etc/bashrc\n' > /etc/profile.d/openfoam.sh \
+    && echo 'source /etc/profile.d/openfoam.sh' >> /etc/bash.bashrc
+ENV BASH_ENV=/etc/profile.d/openfoam.sh
 
 # --- Typst ---
 RUN ARCH=$(uname -m) \
