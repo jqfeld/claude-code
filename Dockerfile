@@ -31,8 +31,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep jq procps \
     unzip xz-utils zstd \
     shellcheck cmake \
-    openfoam \
     && rm -rf /var/lib/apt/lists/*
+
+
+# Add the official OpenFOAM GPG key and repository
+RUN curl -fsSL https://openfoam.org | gpg --dearmor -o /usr/share/keyrings/openfoam-archive-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/openfoam-archive-keyring.gpg] http://openfoam.org noble main" \
+    > /etc/apt/sources.list.d/openfoam.list
+
+# Install OpenFOAM (development release) and clear apt cache to keep image size small
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openfoam-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Automatically source OpenFOAM environment variables for interactive bash sessions
+RUN echo "source /opt/openfoam-dev/etc/bashrc" >> /etc/bashrc
+
 
 # --- Typst ---
 RUN ARCH=$(uname -m) \
