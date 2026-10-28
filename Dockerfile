@@ -1,4 +1,4 @@
-# Claude Code sandbox: Julia, Rust, Python (uv), Typst, OpenFOAM + language servers
+# Claude Code sandbox: Julia, Rust, Python (uv), Typst, OpenFOAM (ESI) + language servers
 # Build:  podman build -t claude-code .
 # Run:    podman run -it --rm \
 #           -v "$(pwd)":/workspace \
@@ -21,6 +21,7 @@ ARG JULIA_VERSION=1.13
 ARG PYTHON_VERSION=3.13
 ARG TYPST_VERSION=0.15.1
 ARG TINYMIST_VERSION=0.15.2
+ARG OPENFOAM_VERSION=2606
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,21 +34,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shellcheck cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# --- OpenFOAM (dev) from dl.openfoam.org ---
-# Key is ASCII-armored; apt reads .asc directly via signed-by (no gpg needed).
-# Explicit [arch=...] avoids the amd64v3 lookup warning on Ubuntu 26.04.
-# openfoam-dev lives in the "dev" component; suite = Ubuntu codename (resolute).
-RUN curl -fsSL https://dl.openfoam.org/gpg.key -o /etc/apt/keyrings/openfoam.asc \
-    && . /etc/os-release \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/openfoam.asc] http://dl.openfoam.org/ubuntu ${VERSION_CODENAME} main dev" \
-       > /etc/apt/sources.list.d/openfoam.list \
+# --- OpenFOAM (ESI/OpenCFD, openfoam.com) ---
+# add-debian-repo.sh sets up the dl.openfoam.com apt repo + key (installs gnupg itself).
+# openfoamXXXX-default = solvers + dev headers + tutorials (no ParaView).
+RUN curl -fsSL https://dl.openfoam.com/add-debian-repo.sh | bash \
     && apt-get update \
-    && apt-get install -y --no-install-recommends openfoam-dev \
+    && apt-get install -y --no-install-recommends openfoam${OPENFOAM_VERSION}-default \
     && rm -rf /var/lib/apt/lists/*
 
 # Load OpenFOAM env in interactive shells (bash.bashrc) and
 # non-interactive bash (BASH_ENV) — Claude Code's Bash tool is non-interactive.
-RUN printf 'source /opt/openfoam-dev/etc/bashrc\n' > /etc/profile.d/openfoam.sh \
+RUN printf 'source /usr/lib/openfoam/openfoam%s/etc/bashrc\n' "${OPENFOAM_VERSION}" > /etc/profile.d/openfoam.sh \
     && echo 'source /etc/profile.d/openfoam.sh' >> /etc/bash.bashrc
 ENV BASH_ENV=/etc/profile.d/openfoam.sh
 
