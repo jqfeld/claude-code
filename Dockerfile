@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep jq procps \
     unzip xz-utils zstd \
     shellcheck cmake \
+    openfoam \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Typst ---
